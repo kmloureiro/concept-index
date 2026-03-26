@@ -201,7 +201,27 @@ Use this exact format:
 - Quick Lookup table at the bottom: 8-15 rows mapping common search keywords to concepts and files
 - Total file: 60-120 lines
 
-### Step 9: Report results
+### Step 9: Ensure CLAUDE.md references the index
+
+Check if the project's `CLAUDE.md` already mentions `CONCEPT_INDEX.md`:
+
+Use Grep to search for "CONCEPT_INDEX" in CLAUDE.md.
+
+**If NOT found:** Ask the user:
+```
+CLAUDE.md doesn't reference the Concept Index yet.
+Want me to add this instruction so Claude reads it before searching?
+
+  "Before searching for files with Glob/Grep, read .planning/codebase/CONCEPT_INDEX.md first."
+
+This costs zero tokens until Claude actually needs to navigate.
+```
+
+If the user agrees, add the instruction to the appropriate section of CLAUDE.md (near other "read before acting" rules, or in a safeguard section). Do NOT add it without asking.
+
+**If already found:** Skip this step silently.
+
+### Step 10: Report results
 
 Tell the user:
 ```
