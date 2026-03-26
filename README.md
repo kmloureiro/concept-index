@@ -50,6 +50,8 @@ A **Quick Lookup** table at the bottom maps common search keywords to concepts a
 - Incremental update mode (only refresh what changed)
 - Works with or without existing codebase docs
 - Quick Lookup table for keyword-based navigation
+- GSD-enhanced: auto-detects [GSD](https://github.com/gorillaworks/get-shit-done) codebase docs for richer results
+- Suggests CLAUDE.md integration so Claude reads the index automatically
 
 ## Installation
 
@@ -91,10 +93,25 @@ Before searching for files with Glob/Grep, read `.planning/codebase/CONCEPT_INDE
 
 This costs zero tokens until Claude actually needs to navigate — unlike a SessionStart hook that injects into every session.
 
-## Works well with
+## Enhanced with GSD (optional)
 
-- [GSD (Get Shit Done)](https://github.com/gorillaworks/get-shit-done) — run `/gsd:map-codebase` first for technical docs, then `/concept-index` to add the concept layer on top
-- Any project with `.planning/codebase/` architecture docs — the skill uses them as input for faster analysis
+This skill works standalone, but produces **significantly better results** when paired with [GSD (Get Shit Done)](https://github.com/gorillaworks/get-shit-done).
+
+GSD's `/gsd:map-codebase` spawns 4 parallel agents that produce 7 deep technical docs (ARCHITECTURE.md, STRUCTURE.md, STACK.md, INTEGRATIONS.md, CONVENTIONS.md, TESTING.md, CONCERNS.md). The concept index reads these as foundation — richer input = richer concepts.
+
+The skill auto-detects GSD:
+
+| Scenario | What happens |
+|----------|-------------|
+| GSD docs exist | Reads them as primary input (best results) |
+| GSD installed but no docs | Suggests running `/gsd:map-codebase` first |
+| No GSD | Standalone analysis from filesystem + project docs |
+
+**Recommended workflow with GSD:**
+```
+/gsd:map-codebase    → deep technical analysis (7 docs)
+/concept-index       → business concept layer on top
+```
 
 ## Sizing guide
 

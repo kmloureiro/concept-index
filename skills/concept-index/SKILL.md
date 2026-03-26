@@ -19,7 +19,15 @@ Output: `.planning/codebase/CONCEPT_INDEX.md`
 - After significant refactoring or new features added
 - When Claude keeps searching for files and not finding them quickly
 - Periodically (every 2-4 weeks) to keep the index fresh
-- After running `/gsd:map-codebase` to add the concept layer on top
+
+## Enhanced with GSD (optional)
+
+This skill works standalone, but produces **significantly better results** when paired with [GSD (Get Shit Done)](https://github.com/gorillaworks/get-shit-done).
+
+GSD's `/gsd:map-codebase` command spawns 4 parallel agents that produce 7 deep technical docs (ARCHITECTURE.md, STRUCTURE.md, STACK.md, INTEGRATIONS.md, CONVENTIONS.md, TESTING.md, CONCERNS.md). The concept index reads these as foundation material — richer input = richer concepts.
+
+**With GSD:** `/gsd:map-codebase` → `/concept-index` (recommended)
+**Without GSD:** `/concept-index` works standalone with its own filesystem analysis
 
 ## Safety rules
 
@@ -54,20 +62,49 @@ Wait for response.
 mkdir -p .planning/codebase
 ```
 
-### Step 2: Gather existing context (fast path)
+### Step 2: Technical foundation (GSD-enhanced or standalone)
 
-Read available project docs in this priority order. Stop gathering once you have enough context to identify the major domains:
+Check if deep codebase docs already exist:
 
-1. `.planning/codebase/ARCHITECTURE.md` — richest source (layers, data flows, abstractions)
-2. `.planning/codebase/STRUCTURE.md` — directory layout with purpose annotations
-3. `.planning/codebase/INTEGRATIONS.md` — external service groupings
-4. `CLAUDE.md` at project root — mentions features, commands, structure
-5. `README.md` at project root — describes features in human terms
-6. `VISION.md` or similar docs at root
+```bash
+ls .planning/codebase/ARCHITECTURE.md .planning/codebase/STRUCTURE.md .planning/codebase/INTEGRATIONS.md 2>/dev/null
+```
 
-**If none of these exist**, proceed directly to Step 3 with a full filesystem scan.
+**Path A — GSD codebase docs found (best results):**
 
-**If `.planning/codebase/` docs exist**, extract candidate concept names from them first, then verify against the actual filesystem in Step 3.
+If at least ARCHITECTURE.md and STRUCTURE.md exist in `.planning/codebase/`, read them as primary input. These contain rich detail about layers, data flows, directory purposes, and integrations. Extract candidate concept names from them, then verify against the actual filesystem in Step 3.
+
+Also read if available:
+- `.planning/codebase/INTEGRATIONS.md` — external service groupings
+- `.planning/codebase/STACK.md` — technologies and dependencies
+- `.planning/codebase/CONCERNS.md` — areas of technical debt
+
+**Path B — No codebase docs, but GSD installed:**
+
+Check if GSD is available:
+```bash
+ls ~/.claude/get-shit-done/workflows/map-codebase.md 2>/dev/null
+```
+
+If found, suggest to the user:
+```
+GSD detected but no codebase docs found.
+Running /gsd:map-codebase first will produce richer results (parallel agents analyze tech stack, architecture, integrations, conventions, and concerns).
+
+1. Run /gsd:map-codebase first, then build concept index on top (recommended)
+2. Skip — build concept index with lightweight analysis only
+```
+
+Wait for response. If option 1, tell the user to run `/gsd:map-codebase` and then re-run `/concept-index` after.
+
+**Path C — Standalone (no GSD, no docs):**
+
+Read whatever project docs exist, in priority order:
+1. `CLAUDE.md` at project root — mentions features, commands, structure
+2. `README.md` at project root — describes features in human terms
+3. `VISION.md` or similar docs at root
+
+Then proceed to Step 3 with a full filesystem scan. The concept index will still be useful, but less detailed than with GSD foundation docs.
 
 ### Step 3: Scan the codebase
 
