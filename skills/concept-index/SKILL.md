@@ -1,6 +1,7 @@
 ---
 name: concept-index
 description: Generate a business-concept index of the codebase — maps domains like "authentication", "video pipeline", "payments" to specific file paths, functions, and entry points. Creates .planning/codebase/CONCEPT_INDEX.md that Claude reads first for fast navigation instead of searching blindly. Use when the user says "concept index", "map concepts", "index codebase", "where is the code for", "create concept map", "update concept index", "reindex", or at the start of a session in an unfamiliar project. Self-updating — re-run to refresh after codebase changes.
+tools: Read, Write, Edit, Glob, Grep, Bash, Agent
 ---
 
 # Concept Index — Business Domain Navigator
@@ -156,6 +157,27 @@ Read 5-10 representative files and note their imports. Files that heavily cross-
 **H6 — Infrastructure grouping:**
 Configuration, deployment, CI/CD, database setup, and dev tooling are infrastructure, not business concepts. Group into a single "Infrastructure / Config" concept unless unusually large.
 
+**H7 — Architectural layer detection:**
+Recognize production patterns and surface them as distinct concepts. Common layers to detect:
+
+| Directory pattern | Layer | Concept name suggestion |
+|-------------------|-------|------------------------|
+| `services/`, `core/` | Business logic | "Core Services" (pipeline, cache, routing, rewriting) |
+| `components/`, `retrievers/` | Custom retrieval | "Retrieval / Search" (hybrid search, reranking) |
+| `agents/`, `intelligence/` | Intelligence | "Intelligence Layer" (self-correcting retrieval, source selection) |
+| `security/`, `guards/` | Guard layers | "Security" (input guard, content filter, output filter) |
+| `evaluation/`, `eval/` | Quality assurance | "Evaluation" (golden datasets, offline/online eval, tracked history) |
+| `observability/`, `monitoring/` | Observability | "Observability" (tracing, feedback capture, cost tracking) |
+| `prompts/`, `templates/` | Prompt management | "Prompts" (versioned, type-specific, hot-swappable) |
+| `tools/` | Tool definitions | "Tools" (pluggable tool definitions, web search, code search) |
+| `data/raw/`, `data/processed/` | Data pipeline | "Data Pipeline" (raw → processed → index config) |
+| `scripts/` | Operations | "Scripts" (seed, migrate, healthcheck) |
+| `frontend/`, `ui/`, `app/` | UI | "Frontend" (containerized separately) |
+| `tests/` | Testing | "Tests" (by domain: retrieval, cache, routing) |
+| `docs/` | Documentation | "Documentation" (architecture, API ref, deployment) |
+
+Not every project has all layers. Only create concepts for layers that actually exist. The annotations in parentheses are examples — derive the real description from file contents.
+
 ### Step 5: Size the index (merge/split)
 
 Target number of concepts based on project size:
@@ -236,7 +258,48 @@ Use this exact format:
 - Paths are relative to project root, in backticks
 - Concept names use Title Case, matching business domain language
 - Quick Lookup table at the bottom: 8-15 rows mapping common search keywords to concepts and files
-- Total file: 60-120 lines
+- Total file: 80-150 lines (including annotated tree)
+
+### Annotated Tree View (after Quick Lookup)
+
+After the Quick Lookup table, generate an annotated directory tree that shows the project structure with one-line descriptions for each major directory group. This provides instant visual understanding of what lives where.
+
+Format — use `├──` tree characters with right-aligned annotations using `}` bracket grouping:
+
+```markdown
+## Directory Map
+
+\```
+project/
+├── app/
+│   ├── main.py
+│   ├── config.py              ─ Entry, config, schemas
+│   └── models.py
+├── services/
+│   ├── rag_pipeline.py
+│   ├── semantic_cache.py      ─ Core business logic: pipeline, cache, routing
+│   └── query_router.py
+├── security/
+│   ├── input_guard.py
+│   └── output_filter.py       ─ Guard layers: input validation, output filtering
+├── pipeline/
+│   ├── clip_finder.py
+│   └── compositor.py          ─ Video pipeline: clips, composition, captions
+├── data/
+│   ├── raw/
+│   └── processed/             ─ Raw → processed → index config
+├── tests/                     ─ Retrieval, cache, routing tests
+└── CLAUDE.md                  ─ AI coding agent context
+\```
+```
+
+**Tree rules:**
+- Show max 3 levels deep
+- Only show directories with 2+ source files (skip single-file dirs)
+- Annotation goes on the last file/dir of each group, aligned with `─`
+- Keep annotations under 50 characters
+- Skip noise dirs (node_modules, __pycache__, .git, dist, venv)
+- This section is optional for very small projects (under 10 files)
 
 ### Step 9: Ensure CLAUDE.md references the index
 
@@ -286,6 +349,65 @@ When updating an existing CONCEPT_INDEX.md:
 6. For **new concepts needed**: add them following the same format
 7. Rewrite with updated timestamp
 8. Report what changed: "[N] files added, [N] removed, [N] concepts updated, [N] new concepts"
+
+### Step 11: Detect duplication risk and suggest hook
+
+After generating the index, analyze the codebase for **query/function duplication risk** — a common problem where Claude creates new functions instead of reusing existing ones.
+
+**Risk signals to detect:**
+
+| Signal | Threshold | Risk level |
+|--------|-----------|------------|
+| Multiple directories with DB/query functions | 2+ dirs with `def.*conn\|cursor\|db\|query` | HIGH |
+| Same function name in different files | Any exact `def name(` match across files | CRITICAL (already duplicated) |
+| Large number of utility functions (50+) across project | Count `def ` lines across source dirs | MEDIUM |
+| Router files with inline DB queries (not using shared helpers) | `SELECT\|INSERT\|UPDATE\|DELETE` inside router files | MEDIUM |
+
+**Detection method:**
+
+```bash
+# Count function definitions per watched directory
+for dir in $(find . -maxdepth 2 -type d -name "routers" -o -name "api" -o -name "services" -o -name "ingestion" -o -name "pipeline" 2>/dev/null); do
+  count=$(grep -rn "def " "$dir" --include="*.py" 2>/dev/null | wc -l)
+  echo "$dir: $count functions"
+done
+
+# Find exact duplicate function names across directories
+grep -rn "^[[:space:]]*\(async \)\?def " --include="*.py" . 2>/dev/null | \
+  sed 's/.*def \([a-zA-Z_]*\)(.*/\1/' | sort | uniq -d
+```
+
+**If risk is detected (2+ signals at MEDIUM or above):**
+
+Tell the user:
+
+```
+Duplication risk detected — [N] directories with query/DB functions, [N] duplicate function names found.
+
+This is a known issue in larger codebases: Claude sometimes creates new functions instead of reusing existing ones, especially during complex multi-step tasks.
+
+Recommendation: install a PostToolUse hook that greps for duplicate function names after each Edit/Write in these directories. It runs in ~90ms, costs zero API tokens, and blocks with a warning when it detects:
+- Exact duplicate function names in other files
+- Semantically similar names (60%+ token overlap)
+
+Want me to generate the hook? It monitors: [list detected directories]
+```
+
+**If the user agrees**, generate a `query-duplication-checker.js` hook following this pattern:
+
+1. **PostToolUse** on `Edit|Write` events
+2. Only triggers for `.py` files in watched directories (the ones detected above)
+3. Extracts new function names from `new_string` or `content`
+4. Uses `execFileSync('grep', ...)` (not `exec` — no shell injection) to search for each function name specifically in other watched directories
+5. For semantic similarity: splits function names into tokens (`snake_case` → tokens), checks 60%+ overlap
+6. Outputs `{"decision": "block", "reason": "..."}` with file:line references when duplicates found
+7. Silent exit (no block) when no duplicates
+8. **Critical:** use `maxBuffer` appropriate for project size, and grep per-function (not all functions at once) to avoid ENOBUFS on large codebases
+9. Exclude vendored/bundled directories (e.g., `core/` with third-party code)
+
+Register the hook in `~/.claude/settings.json` under `PostToolUse` with matcher `Edit|Write`.
+
+**If risk is LOW (single directory, few functions):** Skip silently — the hook overhead isn't worth it.
 
 ## Edge cases
 
