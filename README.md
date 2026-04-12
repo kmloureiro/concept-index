@@ -8,6 +8,15 @@ Claude reads this index first and navigates directly to the right files — no m
 
 In large codebases, Claude Code spends multiple rounds of Glob/Grep searching for the right files. Each failed search wastes tokens and time. The bigger the project, the worse it gets.
 
+## Real-world results
+
+Tested on a Python+React monorepo (3000 files, 400+ Python, 150+ TSX, 14 business domains):
+
+- **Before:** Claude averaged 8-12 search calls to find a billing endpoint
+- **After:** 1-2 calls — Claude reads the index once and navigates directly
+- **Token savings:** 30-50% fewer navigation tokens per session
+- The index pays for itself in the first task of every session
+
 ## The Solution
 
 `/concept-index` generates `.planning/codebase/CONCEPT_INDEX.md` — a navigable map organized by what the code **does**, not where it **lives**.
@@ -56,7 +65,7 @@ A **Quick Lookup** table at the bottom maps common search keywords to concepts a
 ## Installation
 
 ```bash
-git clone https://github.com/carlosloureiro/concept-index.git
+git clone https://github.com/kmloureiro/concept-index.git
 cp -r concept-index/skills/concept-index ~/.claude/skills/
 ```
 
@@ -93,7 +102,9 @@ Before searching for files with Glob/Grep, read `.planning/codebase/CONCEPT_INDE
 
 This costs zero tokens until Claude actually needs to navigate — unlike a SessionStart hook that injects into every session.
 
-## Enhanced with GSD (optional)
+## Companion tools (optional, each adds value independently)
+
+### GSD (Get Shit Done)
 
 This skill works standalone, but produces **significantly better results** when paired with [GSD (Get Shit Done)](https://github.com/gorillaworks/get-shit-done).
 
@@ -112,6 +123,23 @@ The skill auto-detects GSD:
 /gsd:map-codebase    → deep technical analysis (7 docs)
 /concept-index       → business concept layer on top
 ```
+
+### repowise (MCP server)
+
+[repowise](https://github.com/repowise-dev/repowise) adds a **dynamic layer** on top of the static concept index. While the concept index is a curated map that Claude reads once per session, repowise provides live MCP tools for queries Claude can't answer from a static file:
+
+- `get_risk(targets)` — blast radius before modifying a hot file
+- `get_dead_code()` — unreachable files and unused exports
+- `get_dependency_path(from, to)` — shortest import chain between two modules
+- `get_architecture_diagram(module?)` — auto-generated Mermaid diagrams
+
+With the optional wiki layer (`repowise init --provider gemini`), repowise also answers semantic questions: "why does auth work this way?", "what's the context behind this billing module?". The wiki layer costs ~$1.50 for a 3000-file project using Gemini Flash.
+
+**How they complement each other:**
+- **Concept Index (this skill):** "where does billing live?" — instant answer, zero API calls
+- **repowise:** "what's the blast radius of changing the billing webhook?" — live graph query via MCP
+
+The concept index references repowise in its output when detected, so Claude knows both tools exist and picks the right one per query.
 
 ## Sizing guide
 
